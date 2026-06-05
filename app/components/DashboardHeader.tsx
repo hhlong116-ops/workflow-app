@@ -40,16 +40,16 @@ export default function DashboardHeader() {
   };
 
   return (
-    <div className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="flex min-w-0 flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
         <p className="text-sm font-medium text-slate-500">Overview</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">
           Welcome back, Operations Lead
         </h1>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <label className="relative block w-full max-w-md">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+        <label className="relative block w-full min-w-0 lg:w-80">
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
             🔍
           </span>

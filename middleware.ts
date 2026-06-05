@@ -1,17 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
+import { getSupabaseConfig } from "@/lib/supabase/config";
+
+const AUTH_TIMEOUT_MS = 2500;
 
 export async function middleware(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
+  const { key, url } = getSupabaseConfig();
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    url,
+    key,
     {
       cookies: {
         getAll() {
@@ -26,9 +30,11 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const authResult = await Promise.race([
+    supabase.auth.getUser().catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), AUTH_TIMEOUT_MS)),
+  ]);
+  const user = authResult?.data.user ?? null;
 
   // Protected routes - redirect to login if not authenticated
   const protectedRoutes = ["/dashboard", "/projects"];
@@ -59,10 +65,9 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - _next (Next.js internals)
      * - favicon.ico (favicon file)
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next|favicon.ico).*)",
   ],
 };

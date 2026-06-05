@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+function getLoginErrorMessage(message: string) {
+  if (message.toLowerCase().includes("invalid api key")) {
+    return "Supabase API key is invalid. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local, then restart the dev server.";
+  }
+
+  return message || "Login failed. Please try again.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -25,15 +33,19 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        setError(authError.message || "Login failed. Please try again.");
+        setError(getLoginErrorMessage(authError.message));
         setLoading(false);
         return;
       }
 
       // Redirect to dashboard on success
       router.push("/dashboard");
-    } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (loginError) {
+      setError(
+        loginError instanceof Error
+          ? getLoginErrorMessage(loginError.message)
+          : "An unexpected error occurred. Please try again."
+      );
       setLoading(false);
     }
   };
@@ -95,7 +107,7 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center">
             <p className="text-slate-600">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
                 Sign up
               </Link>

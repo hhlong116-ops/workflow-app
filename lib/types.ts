@@ -1,21 +1,21 @@
-export type ProjectRow = {
-  id: string;
-  project_name: string;
-  agent: string;
-  channel: string;
-  deadline: string;
-  status: "Product" | "Finance" | "Contracting" | "Completed";
-  description: string;
-  progress: string;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-};
+import type { Database } from "@/lib/database.types";
 
-export type Project = ProjectRow & {
+export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
+export type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
+export type ProjectFileRow = Database["public"]["Tables"]["project_files"]["Row"];
+export type ProjectFileInsert = Database["public"]["Tables"]["project_files"]["Insert"];
+export type ProjectFileUpdate = Database["public"]["Tables"]["project_files"]["Update"];
+export type ProjectFileAuditEventRow = Database["public"]["Tables"]["project_file_audit_events"]["Row"];
+export type ProjectFileAuditEventInsert = Database["public"]["Tables"]["project_file_audit_events"]["Insert"];
+export type ProjectChatMessageRow = Database["public"]["Tables"]["project_chat_messages"]["Row"];
+export type ProjectChatMessageInsert = Database["public"]["Tables"]["project_chat_messages"]["Insert"];
+
+export type Project = Omit<ProjectRow, "progress" | "deadline" | "description"> & {
   name: string;
   progress: string;
   deadline: string;
+  deadline_raw: string;
+  description: string;
 };
 
 const progressMap: Record<ProjectRow["status"], string> = {
@@ -27,6 +27,10 @@ const progressMap: Record<ProjectRow["status"], string> = {
 
 export function getProgressForStatus(status: ProjectRow["status"]): string {
   return progressMap[status] ?? "0%";
+}
+
+function formatProgress(progress: ProjectRow["progress"], status: ProjectRow["status"]) {
+  return Number.isFinite(progress) ? `${progress}%` : getProgressForStatus(status);
 }
 
 export function mapProjectRow(row: ProjectRow): Project {
@@ -43,6 +47,8 @@ export function mapProjectRow(row: ProjectRow): Project {
     ...row,
     name: row.project_name,
     deadline,
-    progress: row.progress || getProgressForStatus(row.status),
+    deadline_raw: row.deadline,
+    description: row.description ?? "",
+    progress: formatProgress(row.progress, row.status),
   };
 }
