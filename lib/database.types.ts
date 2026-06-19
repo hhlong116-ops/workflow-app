@@ -243,6 +243,55 @@ export type Database = {
           },
         ];
       };
+      project_file_notes: {
+        Row: {
+          id: string;
+          project_file_id: string;
+          project_id: string;
+          user_id: string;
+          note: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_file_id: string;
+          project_id: string;
+          user_id: string;
+          note: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_file_id?: string;
+          project_id?: string;
+          user_id?: string;
+          note?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_file_notes_project_file_id_fkey";
+            columns: ["project_file_id"];
+            isOneToOne: false;
+            referencedRelation: "project_files";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_file_notes_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_file_notes_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       project_chat_messages: {
         Row: {
           id: string;

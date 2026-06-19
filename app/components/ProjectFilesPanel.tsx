@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type {
   ProjectChatMessageInsert,
   ProjectFileAuditEventInsert,
+  ProjectFileNoteRow,
   ProjectFileRow,
 } from "@/lib/types";
 import { getProjectFileDownloadUrl } from "../projects/actions";
@@ -145,6 +146,11 @@ export default function ProjectFilesPanel({
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const addPcmInputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<ProjectFileRow[]>([]);
+  const [notes, setNotes] = useState<ProjectFileNoteRow[]>([]);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [editingNoteId, setEditingNoteId] = useState("");
+  const [editNoteDraft, setEditNoteDraft] = useState("");
+  const [selectedNoteFileId, setSelectedNoteFileId] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingTarget, setWorkingTarget] = useState("");
   const [dragTarget, setDragTarget] = useState("");
@@ -168,6 +174,16 @@ export default function ProjectFilesPanel({
         )
         .sort((left, right) => right.version_number - left.version_number)
     : [];
+  const notesByFileId = notes.reduce<Record<string, ProjectFileNoteRow[]>>((groupedNotes, note) => {
+    const fileNotes = groupedNotes[note.project_file_id] ?? [];
+    return {
+      ...groupedNotes,
+      [note.project_file_id]: [...fileNotes, note],
+    };
+  }, {});
+  const selectedNoteFile = selectedNoteFileId
+    ? files.find((file) => file.id === selectedNoteFileId && file.is_current_version)
+    : undefined;
 
   const refreshFiles = useCallback(async () => {
     setLoading(true);
@@ -192,31 +208,57 @@ export default function ProjectFilesPanel({
     setLoading(false);
   }, [projectId]);
 
+  const refreshNotes = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("project_file_notes")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError(getProjectFilesErrorMessage(error.message));
+      setNotes([]);
+    } else {
+      setNotes(data);
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    const loadFiles = async () => {
+    const loadFilesAndNotes = async () => {
       setLoading(true);
       setError("");
 
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("project_files")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("workflow_slot", { ascending: true })
-        .order("file_stage", { ascending: true })
-        .order("version_number", { ascending: false });
+      const [{ data: fileData, error: fileError }, { data: noteData, error: noteError }] =
+        await Promise.all([
+          supabase
+            .from("project_files")
+            .select("*")
+            .eq("project_id", projectId)
+            .order("workflow_slot", { ascending: true })
+            .order("file_stage", { ascending: true })
+            .order("version_number", { ascending: false }),
+          supabase
+            .from("project_file_notes")
+            .select("*")
+            .eq("project_id", projectId)
+            .order("created_at", { ascending: false }),
+        ]);
 
-      if (error) {
-        setError(getProjectFilesErrorMessage(error.message));
+      if (fileError || noteError) {
+        setError(getProjectFilesErrorMessage(fileError?.message ?? noteError?.message ?? "Unable to load files."));
         setFiles([]);
+        setNotes([]);
       } else {
-        setFiles(data);
+        setFiles(fileData);
+        setNotes(noteData);
       }
 
       setLoading(false);
     };
 
-    loadFiles();
+    loadFilesAndNotes();
   }, [projectId]);
 
   const insertAuditEvent = async (
@@ -263,6 +305,103 @@ export default function ProjectFilesPanel({
     if (error) {
       setError(`${file.file_name}: action saved, but chat notification failed: ${getProjectFilesErrorMessage(error.message)}`);
     }
+  };
+
+  const handleSaveNote = async (file: ProjectFileRow) => {
+    const note = (noteDrafts[file.id] ?? "").trim();
+    if (!note) {
+      return;
+    }
+
+    setError("");
+    setWorkingTarget(`${file.id}-note`);
+
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user?.id) {
+      setError(userError?.message ?? "You must be signed in to add notes.");
+      setWorkingTarget("");
+      return;
+    }
+
+    const { error } = await supabase.from("project_file_notes").insert({
+      project_file_id: file.id,
+      project_id: projectId,
+      user_id: user.id,
+      note,
+    });
+
+    if (error) {
+      setError(getProjectFilesErrorMessage(error.message));
+    } else {
+      setNoteDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [file.id]: "",
+      }));
+      await refreshNotes();
+    }
+
+    setWorkingTarget("");
+  };
+
+  const handleUpdateNote = async (note: ProjectFileNoteRow) => {
+    const nextNote = editNoteDraft.trim();
+    if (!nextNote) {
+      return;
+    }
+
+    setError("");
+    setWorkingTarget(`${note.id}-edit-note`);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("project_file_notes")
+      .update({ note: nextNote })
+      .eq("id", note.id)
+      .eq("project_id", projectId);
+
+    if (error) {
+      setError(getProjectFilesErrorMessage(error.message));
+    } else {
+      setEditingNoteId("");
+      setEditNoteDraft("");
+      await refreshNotes();
+    }
+
+    setWorkingTarget("");
+  };
+
+  const handleDeleteNote = async (note: ProjectFileNoteRow) => {
+    const confirmed = window.confirm("Delete this note?");
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+    setWorkingTarget(`${note.id}-delete-note`);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("project_file_notes")
+      .delete()
+      .eq("id", note.id)
+      .eq("project_id", projectId);
+
+    if (error) {
+      setError(getProjectFilesErrorMessage(error.message));
+    } else {
+      if (editingNoteId === note.id) {
+        setEditingNoteId("");
+        setEditNoteDraft("");
+      }
+      await refreshNotes();
+    }
+
+    setWorkingTarget("");
   };
 
   const uploadOneFile = async (
@@ -529,6 +668,168 @@ export default function ProjectFilesPanel({
     />
   );
 
+  const renderFileNotesDrawer = () => {
+    if (!selectedNoteFile) return null;
+
+    const file = selectedNoteFile;
+    const fileNotes = notesByFileId[file.id] ?? [];
+    const latestNote = fileNotes[0];
+    const isSaving = workingTarget === `${file.id}-note`;
+
+    return (
+      <div
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl"
+        aria-label="File notes"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">File notes</p>
+            <h3 className="mt-1 truncate text-lg font-semibold text-slate-900">{file.file_name}</h3>
+            {latestNote ? (
+              <p className="mt-1 text-xs text-slate-500">
+                Latest note on {formatDateTime(latestNote.created_at)}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedNoteFileId("");
+              setEditingNoteId("");
+              setEditNoteDraft("");
+            }}
+            className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                {file.file_stage}
+              </span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                Row {file.workflow_slot}
+              </span>
+              <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                v{file.version_number}
+              </span>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Uploaded by {file.uploaded_by ?? "Unknown user"} on {formatDateTime(file.uploaded_at)}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-slate-900">Notes</p>
+            {fileNotes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                No notes yet.
+              </div>
+            ) : (
+              fileNotes.map((note) => {
+                const isEditing = editingNoteId === note.id;
+                const isUpdating = workingTarget === `${note.id}-edit-note`;
+                const isDeleting = workingTarget === `${note.id}-delete-note`;
+
+                return (
+                  <div key={note.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editNoteDraft}
+                          onChange={(event) => setEditNoteDraft(event.target.value)}
+                          rows={3}
+                          maxLength={2000}
+                          className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isUpdating || !editNoteDraft.trim()}
+                            onClick={() => handleUpdateNote(note)}
+                            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isUpdating ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingNoteId("");
+                              setEditNoteDraft("");
+                            }}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="break-words text-sm leading-6 text-slate-700">{note.note}</p>
+                        <p className="mt-2 text-xs text-slate-400">
+                          {formatDateTime(note.created_at)}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingNoteId(note.id);
+                              setEditNoteDraft(note.note);
+                            }}
+                            className="text-xs font-semibold text-sky-600 transition hover:text-sky-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteNote(note)}
+                            className="text-xs font-semibold text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-900">Add note</p>
+            <textarea
+              value={noteDrafts[file.id] ?? ""}
+              onChange={(event) =>
+                setNoteDrafts((currentDrafts) => ({
+                  ...currentDrafts,
+                  [file.id]: event.target.value,
+                }))
+              }
+              rows={4}
+              maxLength={2000}
+              placeholder="Add a note..."
+              className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+            />
+
+            <button
+              type="button"
+              disabled={isSaving || !(noteDrafts[file.id] ?? "").trim()}
+              onClick={() => handleSaveNote(file)}
+              className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? "Saving..." : "Save note"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderFileCell = (row: WorkflowRow, stage: ProjectFileStage) => {
     const file = row[stage];
     const uploadKey = getCellInputKey(stage, row.slot, "upload");
@@ -548,13 +849,36 @@ export default function ProjectFilesPanel({
         : stage === "Final" && isNewer(row.Costing, row.Final)
           ? "Final file may be outdated"
           : "";
+    const noteCount = file ? (notesByFileId[file.id] ?? []).length : 0;
 
     if (file) {
       return (
-        <div className="flex min-w-0 flex-col gap-3">
+        <div className="relative flex min-w-0 flex-col gap-3">
           {renderUploadInput(stage, row.slot, "replace")}
           <div className="min-w-0 space-y-2">
-            <p className="truncate text-sm font-semibold text-slate-900">{file.file_name}</p>
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedNoteFileId(file.id);
+                  setOpenMenuTarget("");
+                  setEditingNoteId("");
+                  setEditNoteDraft("");
+                }}
+                className="block min-w-0 truncate text-left text-sm font-semibold text-sky-700 transition hover:text-sky-800 hover:underline"
+                title="Open file notes"
+              >
+                {file.file_name}
+              </button>
+              {noteCount > 0 ? (
+                <span
+                  className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                  title={`${noteCount} file ${noteCount === 1 ? "note" : "notes"}`}
+                >
+                  Notes {noteCount}
+                </span>
+              ) : null}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
                 v{file.version_number}
@@ -745,26 +1069,9 @@ export default function ProjectFilesPanel({
                   >
                     <td className="px-5 py-5 text-sm font-semibold text-slate-500">{row.slot}</td>
                     <td className="px-5 py-5">
-                      <div className="flex flex-col gap-2">
-                        <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(status)}`}>
-                          {status}
-                        </span>
-                        {row.PCM ? (
-                          <span className="w-fit rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
-                            PCM Uploaded
-                          </span>
-                        ) : null}
-                        {row.Costing && !warnings.some((warning) => warning.includes("Costing")) ? (
-                          <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            Costing Completed
-                          </span>
-                        ) : null}
-                        {warnings.map((warning) => (
-                          <span key={warning} className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                            {warning}
-                          </span>
-                        ))}
-                      </div>
+                      <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(status)}`}>
+                        {status}
+                      </span>
                     </td>
                     {stages.map((stage) => (
                       <td key={stage} className="min-w-[330px] px-5 py-5">
@@ -778,6 +1085,8 @@ export default function ProjectFilesPanel({
           </table>
         )}
       </div>
+
+      {renderFileNotesDrawer()}
 
       {historyTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">

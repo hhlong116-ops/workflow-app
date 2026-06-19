@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectActivityTimeline from "../../components/ProjectActivityTimeline";
 import ProjectChatBox from "../../components/ProjectChatBox";
@@ -10,14 +10,17 @@ import Sidebar from "../../components/Sidebar";
 import StatusBadge from "../../components/StatusBadge";
 import { createClient } from "@/lib/supabase/client";
 import { Project, mapProjectRow } from "@/lib/types";
+import { deleteProject } from "../actions";
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id as string;
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activityVersion, setActivityVersion] = useState(0);
+  const [isDeleting, startDeleteTransition] = useTransition();
 
   useEffect(() => {
     if (!id) return;
@@ -88,6 +91,26 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const handleDeleteProject = () => {
+    const confirmed = window.confirm(`Delete "${project.name}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    startDeleteTransition(async () => {
+      const result = await deleteProject(project.id);
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      router.push("/dashboard");
+    });
+  };
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-[1500px] space-y-5">
@@ -147,8 +170,13 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              <button className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
-                Edit project
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteProject}
+                className="mt-4 w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting project..." : "Delete project"}
               </button>
             </div>
           </div>

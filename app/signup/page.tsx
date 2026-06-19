@@ -1,23 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
-  const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setMessage("");
     setLoading(true);
+    const normalizedEmail = email.trim().toLowerCase();
 
     // Validate passwords match
     if (password !== confirmPassword) {
@@ -34,19 +35,33 @@ export default function SignupPage() {
     }
 
     try {
-      const { error: authError } = await supabase.auth.signUp({
-        email,
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: normalizedEmail,
         password,
       });
 
       if (authError) {
-        setError(authError.message || "Signup failed. Please try again.");
+        const isDuplicateEmail = authError.message.toLowerCase().includes("already");
+        setError(
+          isDuplicateEmail
+            ? "An account with this email already exists. Please sign in instead."
+            : authError.message || "Signup failed. Please try again."
+        );
         setLoading(false);
         return;
       }
 
-      // Redirect to login on success
-      router.push("/login?message=Check%20your%20email%20to%20confirm%20your%20account");
+      if (data.user && data.user.identities?.length === 0) {
+        setError("An account with this email already exists. Please sign in instead.");
+        setLoading(false);
+        return;
+      }
+
+      setMessage("Account created. Check your email to confirm your account, then sign in.");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setLoading(false);
     } catch {
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
@@ -111,6 +126,12 @@ export default function SignupPage() {
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
+            {message && !error && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <p className="text-sm text-emerald-700">{message}</p>
               </div>
             )}
 

@@ -7,6 +7,8 @@ export type ProjectFileInsert = Database["public"]["Tables"]["project_files"]["I
 export type ProjectFileUpdate = Database["public"]["Tables"]["project_files"]["Update"];
 export type ProjectFileAuditEventRow = Database["public"]["Tables"]["project_file_audit_events"]["Row"];
 export type ProjectFileAuditEventInsert = Database["public"]["Tables"]["project_file_audit_events"]["Insert"];
+export type ProjectFileNoteRow = Database["public"]["Tables"]["project_file_notes"]["Row"];
+export type ProjectFileNoteInsert = Database["public"]["Tables"]["project_file_notes"]["Insert"];
 export type ProjectChatMessageRow = Database["public"]["Tables"]["project_chat_messages"]["Row"];
 export type ProjectChatMessageInsert = Database["public"]["Tables"]["project_chat_messages"]["Insert"];
 

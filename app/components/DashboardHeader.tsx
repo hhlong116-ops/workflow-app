@@ -49,7 +49,7 @@ export default function DashboardHeader() {
       </div>
 
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-        <label className="relative block w-full min-w-0 lg:w-80">
+        <label className="hidden">
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
             🔍
           </span>

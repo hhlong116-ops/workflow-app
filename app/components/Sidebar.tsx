@@ -1,17 +1,15 @@
 import Link from "next/link";
 
 type SidebarProps = {
-  currentPage?: "dashboard" | "projects" | "tasks" | "teams" | "settings";
+  currentPage?: "dashboard" | "projects" | "tasks" | "system-flow";
   showTip?: boolean;
   className?: string;
 };
 
 const navItems = [
   { label: "Dashboard", key: "dashboard", href: "/dashboard" },
-  { label: "Projects", key: "projects", href: "/projects" },
   { label: "My Tasks", key: "tasks", href: "/tasks" },
-  { label: "Teams", key: "teams", href: "/teams" },
-  { label: "Settings", key: "settings", href: "/settings" },
+  { label: "System Flow", key: "system-flow", href: "/system-flow" },
 ];
 
 export default function Sidebar({

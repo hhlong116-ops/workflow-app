@@ -4,7 +4,7 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
 
 const AUTH_TIMEOUT_MS = 2500;
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const response = NextResponse.next({
     request: {

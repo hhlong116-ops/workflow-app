@@ -116,9 +116,45 @@ create table if not exists project_file_audit_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists project_file_notes (
+  id uuid primary key default gen_random_uuid(),
+  project_file_id uuid not null references project_files(id) on delete cascade,
+  project_id uuid not null references projects(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  note text not null check (length(trim(note)) > 0 and length(note) <= 2000),
+  created_at timestamptz not null default now()
+);
+
+alter table projects enable row level security;
 alter table project_files enable row level security;
 alter table project_chat_messages enable row level security;
 alter table project_file_audit_events enable row level security;
+alter table project_file_notes enable row level security;
+
+drop policy if exists "Users can view their projects" on projects;
+create policy "Users can view their projects"
+on projects for select
+to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Users can create their projects" on projects;
+create policy "Users can create their projects"
+on projects for insert
+to authenticated
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can update their projects" on projects;
+create policy "Users can update their projects"
+on projects for update
+to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can delete their projects" on projects;
+create policy "Users can delete their projects"
+on projects for delete
+to authenticated
+using (user_id = auth.uid());
 
 drop policy if exists "Users can view their project files" on project_files;
 create policy "Users can view their project files"
@@ -236,6 +272,77 @@ with check (
     select 1
     from projects
     where projects.id = project_file_audit_events.project_id
+      and projects.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Users can view notes for their project files" on project_file_notes;
+create policy "Users can view notes for their project files"
+on project_file_notes for select
+to authenticated
+using (
+  exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
+      and projects.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Users can add notes to their project files" on project_file_notes;
+create policy "Users can add notes to their project files"
+on project_file_notes for insert
+to authenticated
+with check (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
+      and projects.user_id = auth.uid()
+  )
+  and exists (
+    select 1
+    from project_files
+    where project_files.id = project_file_notes.project_file_id
+      and project_files.project_id = project_file_notes.project_id
+      and project_files.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Users can update their project file notes" on project_file_notes;
+create policy "Users can update their project file notes"
+on project_file_notes for update
+to authenticated
+using (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
+      and projects.user_id = auth.uid()
+  )
+)
+with check (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
+      and projects.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Users can delete their project file notes" on project_file_notes;
+create policy "Users can delete their project file notes"
+on project_file_notes for delete
+to authenticated
+using (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
       and projects.user_id = auth.uid()
   )
 );
