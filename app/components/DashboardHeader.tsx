@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 export default function DashboardHeader() {
   const router = useRouter();
   const supabase = createClient();
-  const [userEmail, setUserEmail] = useState("");
+  const [userEmail, setUserEmail] = useState("Public demo");
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -18,6 +19,10 @@ export default function DashboardHeader() {
       } = await supabase.auth.getUser();
       if (user?.email) {
         setUserEmail(user.email);
+        setIsSignedIn(true);
+      } else {
+        setUserEmail("Public demo");
+        setIsSignedIn(false);
       }
     };
     getUser();
@@ -26,10 +31,18 @@ export default function DashboardHeader() {
   const handleLogout = async () => {
     setLoading(true);
     await supabase.auth.signOut();
-    router.push("/login");
+    setUserEmail("Public demo");
+    setIsSignedIn(false);
+    setShowDropdown(false);
+    router.refresh();
+    setLoading(false);
   };
 
   const getInitials = (email: string) => {
+    if (!email.includes("@")) {
+      return "PD";
+    }
+
     return email
       .split("@")[0]
       .split(".")
@@ -78,13 +91,15 @@ export default function DashboardHeader() {
                 <p className="text-xs text-slate-500 uppercase tracking-wider">Account</p>
                 <p className="text-sm font-medium text-slate-900 mt-1">{userEmail}</p>
               </div>
-              <button
-                onClick={handleLogout}
-                disabled={loading}
-                className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition disabled:opacity-50"
-              >
-                {loading ? "Signing out..." : "Sign out"}
-              </button>
+              {isSignedIn ? (
+                <button
+                  onClick={handleLogout}
+                  disabled={loading}
+                  className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                >
+                  {loading ? "Signing out..." : "Sign out"}
+                </button>
+              ) : null}
             </div>
           )}
         </div>
