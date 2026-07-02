@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isSignedIn, setIsSignedIn] = useState(false);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -47,6 +48,11 @@ export default function Dashboard() {
       setError("");
 
       const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsSignedIn(Boolean(user?.id && !user.is_anonymous));
+
       const { data, error } = await supabase
         .from("projects")
         .select("*")
@@ -206,12 +212,14 @@ export default function Dashboard() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   />
                 </label>
-                <Link
-                  href="/projects/new"
-                  className="inline-flex w-fit rounded-2xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-300"
-                >
-                  + New project
-                </Link>
+                {isSignedIn ? (
+                  <Link
+                    href="/projects/new"
+                    className="inline-flex w-fit rounded-2xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-300"
+                  >
+                    + New project
+                  </Link>
+                ) : null}
               </div>
             </div>
 

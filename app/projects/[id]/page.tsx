@@ -20,6 +20,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activityVersion, setActivityVersion] = useState(0);
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [isDeleting, startDeleteTransition] = useTransition();
 
   useEffect(() => {
@@ -28,6 +29,11 @@ export default function ProjectDetailPage() {
     const fetchProject = async () => {
       setLoading(true);
       const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsSignedIn(Boolean(user?.id && !user.is_anonymous));
+
       const { data, error } = await supabase
         .from("projects")
         .select("*")
@@ -92,6 +98,11 @@ export default function ProjectDetailPage() {
   }
 
   const handleDeleteProject = () => {
+    if (!isSignedIn) {
+      setError("Public demo users can view projects but cannot delete them.");
+      return;
+    }
+
     const confirmed = window.confirm(`Delete "${project.name}"? This cannot be undone.`);
     if (!confirmed) {
       return;
@@ -170,14 +181,16 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleDeleteProject}
-                className="mt-4 w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isDeleting ? "Deleting project..." : "Delete project"}
-              </button>
+              {isSignedIn ? (
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteProject}
+                  className="mt-4 w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting project..." : "Delete project"}
+                </button>
+              ) : null}
             </div>
           </div>
 

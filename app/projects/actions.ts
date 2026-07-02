@@ -74,7 +74,7 @@ export async function createProject(
     return { error: `Unable to verify your session: ${userError.message}` };
   }
 
-  if (!user?.id) {
+  if (!user?.id || user.is_anonymous) {
     redirect("/login");
   }
 
@@ -104,23 +104,12 @@ export async function getProjectFileDownloadUrl(
   fileId: string
 ): Promise<DownloadFileResult> {
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData.user;
-
-  if (userError) {
-    return { error: `Unable to verify your session: ${userError.message}` };
-  }
-
-  if (!user?.id) {
-    return { error: "You must be signed in to download files." };
-  }
 
   const { data: file, error: fileError } = await supabase
     .from("project_files")
     .select("storage_bucket, storage_path, project_id, user_id")
     .eq("id", fileId)
     .eq("project_id", projectId)
-    .eq("user_id", user.id)
     .single();
 
   if (fileError || !file) {
@@ -147,7 +136,7 @@ export async function deleteProject(projectId: string): Promise<DeleteProjectRes
     return { error: `Unable to verify your session: ${userError.message}` };
   }
 
-  if (!user?.id) {
+  if (!user?.id || user.is_anonymous) {
     return { error: "You must be signed in to delete projects." };
   }
 

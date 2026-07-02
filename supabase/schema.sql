@@ -131,11 +131,24 @@ alter table project_chat_messages enable row level security;
 alter table project_file_audit_events enable row level security;
 alter table project_file_notes enable row level security;
 
+grant usage on schema public to anon, authenticated;
+grant select on public.projects to anon;
+grant select on public.project_files to anon;
+grant select on public.project_file_notes to anon;
+grant select on public.project_chat_messages to anon;
+grant select on public.project_file_audit_events to anon;
+
 drop policy if exists "Users can view their projects" on projects;
 create policy "Users can view their projects"
 on projects for select
 to authenticated
 using (user_id = auth.uid());
+
+drop policy if exists "Public demo can view projects" on projects;
+create policy "Public demo can view projects"
+on projects for select
+to anon
+using (true);
 
 drop policy if exists "Users can create their projects" on projects;
 create policy "Users can create their projects"
@@ -167,6 +180,18 @@ using (
     from projects
     where projects.id = project_files.project_id
       and projects.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Public demo can view project files" on project_files;
+create policy "Public demo can view project files"
+on project_files for select
+to anon
+using (
+  exists (
+    select 1
+    from projects
+    where projects.id = project_files.project_id
   )
 );
 
@@ -235,6 +260,18 @@ using (
   )
 );
 
+drop policy if exists "Public demo can view project chat messages" on project_chat_messages;
+create policy "Public demo can view project chat messages"
+on project_chat_messages for select
+to anon
+using (
+  exists (
+    select 1
+    from projects
+    where projects.id = project_chat_messages.project_id
+  )
+);
+
 drop policy if exists "Users can add project chat messages" on project_chat_messages;
 create policy "Users can add project chat messages"
 on project_chat_messages for insert
@@ -262,6 +299,18 @@ using (
   )
 );
 
+drop policy if exists "Public demo can view project file audit events" on project_file_audit_events;
+create policy "Public demo can view project file audit events"
+on project_file_audit_events for select
+to anon
+using (
+  exists (
+    select 1
+    from projects
+    where projects.id = project_file_audit_events.project_id
+  )
+);
+
 drop policy if exists "Users can add project file audit events" on project_file_audit_events;
 create policy "Users can add project file audit events"
 on project_file_audit_events for insert
@@ -286,6 +335,18 @@ using (
     from projects
     where projects.id = project_file_notes.project_id
       and projects.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "Public demo can view project file notes" on project_file_notes;
+create policy "Public demo can view project file notes"
+on project_file_notes for select
+to anon
+using (
+  exists (
+    select 1
+    from projects
+    where projects.id = project_file_notes.project_id
   )
 );
 
@@ -364,6 +425,12 @@ using (
   bucket_id = 'project-files'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+drop policy if exists "Public demo can read project storage objects" on storage.objects;
+create policy "Public demo can read project storage objects"
+on storage.objects for select
+to anon
+using (bucket_id = 'project-files');
 
 drop policy if exists "Users can delete files from their folder" on storage.objects;
 create policy "Users can delete files from their folder"

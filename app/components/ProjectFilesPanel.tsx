@@ -160,6 +160,7 @@ export default function ProjectFilesPanel({
     slot: number;
   } | null>(null);
   const [error, setError] = useState("");
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [isDownloading, startDownloadTransition] = useTransition();
 
   const rows = buildWorkflowRows(files);
@@ -184,6 +185,19 @@ export default function ProjectFilesPanel({
   const selectedNoteFile = selectedNoteFileId
     ? files.find((file) => file.id === selectedNoteFileId && file.is_current_version)
     : undefined;
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      setIsSignedIn(Boolean(user?.id && !user.is_anonymous));
+    };
+
+    loadUser();
+  }, []);
 
   const refreshFiles = useCallback(async () => {
     setLoading(true);
@@ -308,6 +322,11 @@ export default function ProjectFilesPanel({
   };
 
   const handleSaveNote = async (file: ProjectFileRow) => {
+    if (!isSignedIn) {
+      setError("Public demo users can read notes but cannot add them.");
+      return;
+    }
+
     const note = (noteDrafts[file.id] ?? "").trim();
     if (!note) {
       return;
@@ -349,6 +368,11 @@ export default function ProjectFilesPanel({
   };
 
   const handleUpdateNote = async (note: ProjectFileNoteRow) => {
+    if (!isSignedIn) {
+      setError("Public demo users can read notes but cannot edit them.");
+      return;
+    }
+
     const nextNote = editNoteDraft.trim();
     if (!nextNote) {
       return;
@@ -376,6 +400,11 @@ export default function ProjectFilesPanel({
   };
 
   const handleDeleteNote = async (note: ProjectFileNoteRow) => {
+    if (!isSignedIn) {
+      setError("Public demo users can read notes but cannot delete them.");
+      return;
+    }
+
     const confirmed = window.confirm("Delete this note?");
     if (!confirmed) {
       return;
@@ -495,6 +524,11 @@ export default function ProjectFilesPanel({
     slot: number,
     action: WorkflowAction
   ) => {
+    if (!isSignedIn) {
+      setError("Public demo users can view files but cannot upload or replace them.");
+      return;
+    }
+
     const nextFiles = Array.from(selectedFiles);
     if (nextFiles.length === 0) return;
 
@@ -563,6 +597,11 @@ export default function ProjectFilesPanel({
   };
 
   const handleDelete = async (file: ProjectFileRow) => {
+    if (!isSignedIn) {
+      setError("Public demo users can view files but cannot delete them.");
+      return;
+    }
+
     const confirmed = window.confirm(`Delete ${file.file_stage} row ${file.workflow_slot}? The file will remain in history.`);
     if (!confirmed) return;
 
@@ -772,26 +811,28 @@ export default function ProjectFilesPanel({
                         <p className="mt-2 text-xs text-slate-400">
                           {formatDateTime(note.created_at)}
                         </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingNoteId(note.id);
-                              setEditNoteDraft(note.note);
-                            }}
-                            className="text-xs font-semibold text-sky-600 transition hover:text-sky-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isDeleting}
-                            onClick={() => handleDeleteNote(note)}
-                            className="text-xs font-semibold text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isDeleting ? "Deleting..." : "Delete"}
-                          </button>
-                        </div>
+                        {isSignedIn ? (
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingNoteId(note.id);
+                                setEditNoteDraft(note.note);
+                              }}
+                              className="text-xs font-semibold text-sky-600 transition hover:text-sky-700"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => handleDeleteNote(note)}
+                              className="text-xs font-semibold text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isDeleting ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        ) : null}
                       </>
                     )}
                   </div>
@@ -800,31 +841,33 @@ export default function ProjectFilesPanel({
             )}
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-sm font-semibold text-slate-900">Add note</p>
-            <textarea
-              value={noteDrafts[file.id] ?? ""}
-              onChange={(event) =>
-                setNoteDrafts((currentDrafts) => ({
-                  ...currentDrafts,
-                  [file.id]: event.target.value,
-                }))
-              }
-              rows={4}
-              maxLength={2000}
-              placeholder="Add a note..."
-              className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-            />
+          {isSignedIn ? (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-900">Add note</p>
+              <textarea
+                value={noteDrafts[file.id] ?? ""}
+                onChange={(event) =>
+                  setNoteDrafts((currentDrafts) => ({
+                    ...currentDrafts,
+                    [file.id]: event.target.value,
+                  }))
+                }
+                rows={4}
+                maxLength={2000}
+                placeholder="Add a note..."
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              />
 
-            <button
-              type="button"
-              disabled={isSaving || !(noteDrafts[file.id] ?? "").trim()}
-              onClick={() => handleSaveNote(file)}
-              className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSaving ? "Saving..." : "Save note"}
-            </button>
-          </div>
+              <button
+                type="button"
+                disabled={isSaving || !(noteDrafts[file.id] ?? "").trim()}
+                onClick={() => handleSaveNote(file)}
+                className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save note"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -919,28 +962,32 @@ export default function ProjectFilesPanel({
                 >
                   Download
                 </button>
-                <button
-                  type="button"
-                  disabled={isReplacing || isDeleting}
-                  onClick={() => {
-                    setOpenMenuTarget("");
-                    inputRefs.current[replaceKey]?.click();
-                  }}
-                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isReplacing ? "Replacing..." : "Replace"}
-                </button>
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => {
-                    setOpenMenuTarget("");
-                    handleDelete(file);
-                  }}
-                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
+                {isSignedIn ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isReplacing || isDeleting}
+                      onClick={() => {
+                        setOpenMenuTarget("");
+                        inputRefs.current[replaceKey]?.click();
+                      }}
+                      className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isReplacing ? "Replacing..." : "Replace"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => {
+                        setOpenMenuTarget("");
+                        handleDelete(file);
+                      }}
+                      className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -962,19 +1009,21 @@ export default function ProjectFilesPanel({
       <div
         onDragEnter={(event) => {
           event.preventDefault();
-          if (canUpload) setDragTarget(uploadKey);
+          if (isSignedIn && canUpload) setDragTarget(uploadKey);
         }}
         onDragOver={(event) => {
           event.preventDefault();
-          if (canUpload) setDragTarget(uploadKey);
+          if (isSignedIn && canUpload) setDragTarget(uploadKey);
         }}
         onDragLeave={(event) => {
           event.preventDefault();
           setDragTarget("");
         }}
-        onDrop={(event) => canUpload ? handleDrop(event, stage, row.slot) : event.preventDefault()}
+        onDrop={(event) =>
+          isSignedIn && canUpload ? handleDrop(event, stage, row.slot) : event.preventDefault()
+        }
         className={`rounded-2xl border border-dashed p-4 transition ${
-          canUpload
+          isSignedIn && canUpload
             ? isActiveDrop
               ? "border-sky-400 bg-sky-50"
               : "border-slate-300 bg-slate-50 hover:border-slate-400"
@@ -984,17 +1033,23 @@ export default function ProjectFilesPanel({
         {renderUploadInput(stage, row.slot, "upload")}
         <div className="flex flex-col gap-3">
           <p className="text-sm font-semibold text-slate-900">
-            {canUpload ? `Upload ${stage}` : stage === "Costing" ? "Waiting for row PCM" : "Waiting for row Costing"}
+            {isSignedIn && canUpload
+              ? `Upload ${stage}`
+              : !isSignedIn
+                ? "No file uploaded"
+                : stage === "Costing" ? "Waiting for row PCM" : "Waiting for row Costing"}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={!canUpload || isUploading}
-              onClick={() => inputRefs.current[uploadKey]?.click()}
-              className="w-fit rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isUploading ? "Uploading..." : "Choose file"}
-            </button>
+            {isSignedIn ? (
+              <button
+                type="button"
+                disabled={!canUpload || isUploading}
+                onClick={() => inputRefs.current[uploadKey]?.click()}
+                className="w-fit rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isUploading ? "Uploading..." : "Choose file"}
+              </button>
+            ) : null}
             {hasHistory ? (
               <button
                 type="button"
@@ -1017,24 +1072,26 @@ export default function ProjectFilesPanel({
           <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Files</p>
           <h2 className="mt-2 text-xl font-semibold text-slate-900">PCM - Costing - Final</h2>
         </div>
-        <div>
-          <input
-            ref={addPcmInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx"
-            className="hidden"
-            onChange={(event) => handleFileInput(event, "PCM", nextSlot, "upload")}
-          />
-          <button
-            type="button"
-            disabled={Boolean(workingTarget)}
-            onClick={() => addPcmInputRef.current?.click()}
-            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Add PCM file
-          </button>
-        </div>
+        {isSignedIn ? (
+          <div>
+            <input
+              ref={addPcmInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={(event) => handleFileInput(event, "PCM", nextSlot, "upload")}
+            />
+            <button
+              type="button"
+              disabled={Boolean(workingTarget)}
+              onClick={() => addPcmInputRef.current?.click()}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add PCM file
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {error ? (

@@ -99,7 +99,9 @@ export default function ProjectChatBox({ projectId }: ProjectChatBoxProps) {
         return;
       }
 
-      setCurrentUserId(userData.user?.id ?? "");
+      setCurrentUserId(
+        userData.user?.id && !userData.user.is_anonymous ? userData.user.id : ""
+      );
 
       if (error) {
         setError(getChatErrorMessage(error.message));
@@ -175,8 +177,8 @@ export default function ProjectChatBox({ projectId }: ProjectChatBoxProps) {
         error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError || !user?.id) {
-        setError(userError?.message ?? "You must be signed in to leave a message.");
+      if (userError || !user?.id || user.is_anonymous) {
+        setError(userError?.message ?? "Public demo users can read chat but cannot send messages.");
         return;
       }
 
@@ -308,14 +310,15 @@ export default function ProjectChatBox({ projectId }: ProjectChatBoxProps) {
               id="project-chat-message"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
+              disabled={!currentUserId}
               maxLength={2000}
               rows={1}
-              placeholder="Leave a message..."
+              placeholder={currentUserId ? "Leave a message..." : "Public demo is read-only"}
               className="min-h-11 flex-1 resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
             />
             <button
               type="submit"
-              disabled={isSending || !message.trim()}
+              disabled={!currentUserId || isSending || !message.trim()}
               className="shrink-0 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSending ? "..." : "Send"}

@@ -13,12 +13,18 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const fetchProjects = async () => {
       setLoading(true);
       const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsSignedIn(Boolean(user?.id && !user.is_anonymous));
+
       const { data, error } = await supabase
         .from("projects")
         .select("*")
@@ -36,6 +42,11 @@ export default function ProjectsPage() {
   }, []);
 
   const handleDeleteProject = (project: Project) => {
+    if (!isSignedIn) {
+      setError("Public demo users can view projects but cannot delete them.");
+      return;
+    }
+
     const confirmed = window.confirm(`Delete "${project.name}"? This cannot be undone.`);
     if (!confirmed) {
       return;
@@ -71,12 +82,14 @@ export default function ProjectsPage() {
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Projects</p>
                 <h1 className="mt-2 text-3xl font-semibold text-slate-900">All projects</h1>
               </div>
-              <Link
-                href="/projects/new"
-                className="inline-flex rounded-2xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-300"
-              >
-                + New project
-              </Link>
+              {isSignedIn ? (
+                <Link
+                  href="/projects/new"
+                  className="inline-flex rounded-2xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-300"
+                >
+                  + New project
+                </Link>
+              ) : null}
             </div>
           </div>
 
@@ -127,14 +140,16 @@ export default function ProjectsPage() {
                             <Link href={`/projects/${project.id}`} className="text-sky-600 text-sm hover:underline">
                               View
                             </Link>
-                            <button
-                              type="button"
-                              disabled={isPending && deletingId === project.id}
-                              onClick={() => handleDeleteProject(project)}
-                              className="text-sm font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {deletingId === project.id ? "Deleting..." : "Delete"}
-                            </button>
+                            {isSignedIn ? (
+                              <button
+                                type="button"
+                                disabled={isPending && deletingId === project.id}
+                                onClick={() => handleDeleteProject(project)}
+                                className="text-sm font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {deletingId === project.id ? "Deleting..." : "Delete"}
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
